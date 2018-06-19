@@ -22,11 +22,19 @@ class MyEnv(simpy.Environment):
     def queuList(self):
         return self._queueList
 
-    def createArrival(self):
-        _arrival = Arrival(self)
+    def createCustomerType(self, customerId):
+        if self._customer is None:
+            self._customer = Customer()
+        self._customer.createNewType(customerId)
+
+    def createArrival(self, arrivalId, customerId = None):
+        _arrival = Arrival(self, arrivalId)
+        if customerId is not None:
+            _arrival.customerType = self._customer.idToIndex(customerId)
         self._arrivalList.append(_arrival)
         return _arrival
 
+# it is not recomended to use this func
     def addArrival(self, arrival):
         self._arrivalList.append(arrival)
 
@@ -40,8 +48,17 @@ class MyEnv(simpy.Environment):
         self._queueList.append(_queue)
         return _queue
 
+# it is not recomended to use this func
     def addQueue(self, queue):
         self._queueList.append(queue)
+
+# now, there is no commection delay
+    def createNet(self, fromQueue, toQueue):
+        fromQueue.nextQueue(toQueue)
+
+    def assineCustomerToQueue(self, customerId, toQueue):
+        #TODO
+        pass
 
     def run(self, numOfLoop):
         for i in self._arrivalList:
@@ -49,6 +66,25 @@ class MyEnv(simpy.Environment):
         for i in self._queueList:
             self.process(i.run())
         super().run(numOfLoop)
+
+class Customer(object):
+    def __init__(self):
+        # {0:[q1, q2, ...], 1:[q1, q3, ...], ...}
+        self._typeList = {}
+        # {'A':0, 'B':1, ...}
+        self._idToIndex = {}
+        self._nextIndex = 0
+
+    @property
+    def typeList(self):
+        return self._typeList
+
+    def createNewType(self, customerId):
+        self._idToIndex[customerId] = self._nextIndex
+        self._nextIndex += 2
+
+    def idToIndex(self, customerId):
+        return self._idToIndex[customerId]
 
 '''
 class Arrival
@@ -58,10 +94,16 @@ Arrival type:
     deterministic   "det"
 '''
 class Arrival():
-    def __init__(self, env): #type: env:MyEnv
+    def __init__(self, env, arrivalId): #type: env:MyEnv
         self._env = env
         self._mean = 0
         self._arrival = ''
+        self._id = arrivalId
+        self._customerType = 0
+# getter of id
+    @property
+    def id(self):
+        return self._id
 
 # getter and setter of distribution type
     @property
@@ -95,10 +137,19 @@ class Arrival():
     def nextQueue(self, nextQueue):
         self._nextQueue = nextQueue
 
+# getter and setter of customerType
+    @property
+    def customerType(self):
+        return self._customerType
+
+    @customerType.setter
+    def customerType(self, customerType):
+        self._customerType = customerType
+
     def _createTask(self):
         # TODO more complex task create method
         task = {
-           'classType':0,
+           'classType': self._customerType,
            'workload':0,
            'queueId':[],
            'queueArrivedTime':[],
