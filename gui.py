@@ -9,43 +9,48 @@ class MyApp(wx.Frame):
         super(MyApp, self).__init__(*args, **kw)
         self._f = True
         self.init_ui()
+        self._x = 0
+        self._y = 0
 
     def init_ui(self):
         self.SetTitle('タイトル')
-        #self.SetSize((400, 300))
+        self.SetSize((800, 600))
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_TIMER, self.OnTimer)
+        self.timer = wx.Timer(self)
+        self.timer.Start(10)
         self.Show()
-        self.display()
 
-    def display(self):
-        self._panel = wx.Panel(self, -1, pos=(10,10), size=(180,260))
-        self._cdc = wx.ClientDC(self._panel)
-        w, h = self._panel.GetSize()
-        self._bmp = wx.Bitmap(w,h)
-        self._bdc = wx.BufferedDC(self._cdc, self._bmp)
-        self._bdc.SetPen(wx.Pen('red'))
-        self._bdc.SetBrush(wx.Brush('red'))
-        self._bdc.DrawCircle(50,50,10)
-        self._cdc.DrawBitmap(self._bmp,0,0)
+    def OnPaint(self, evt):
+        dc = wx.BufferedPaintDC(self, self._buffer)
 
-    def panelUi(self):
-        self._panel_ui = wx.Panel(self, -1, pos=(50,50), size=(300,200))
+    def OnSize(self, evt):
+        w, h = self.GetClientSize()
+        self._buffer = wx.EmptyBitmap(w,h)
+        self.InitBuffer()
+        self.DrawToBuffer()
 
-    def label(self):
-        self._label = wx.StaticText(self._panel_ui, -1, pos=(10, 10))
-        self._label.SetLabel('Hello')
-        self._f = False
+    def OnTimer(self, evt):
+        self.InitBuffer()
+        self.DrawBall()
 
-    def button(self):
-        btn = wx.Button(self._panel_ui, -1, 'copy', pos=(10,90))
-        btn.Bind(wx.EVT_BUTTON, self.clicked)
+    def InitBuffer(self):
+        self._dc = wx.BufferedDC(wx.ClientDC(self), self._buffer)
+        brush = wx.Brush('white')
+        self._dc.SetBackground(brush)
+        self._dc.SetPen(wx.Pen('blue',3))
 
-    def box(self):
-        self._box = wx.TextCtrl(self._panel_ui, -1, pos=(10,50))
+    def DrawToBuffer(self):
+        self._dc.Clear()
+        w, h = self._dc.GetSize()
+        self._dc.DrawCircle(w/2,h/2,100)
 
-    def clicked(self, event):
-        text = self._box.GetValue()
-        self._box.Clear()
-        self._label.SetLabel(text)
+    def DrawBall(self):
+        self._dc.Clear()
+        self._dc.DrawCircle(self._x, self._y, 100)
+        self._x += 1
+        self._y += 1
 
 if __name__ == '__main__':
     app = wx.App()

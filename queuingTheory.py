@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 # coding: UTF-8
 import simpy, random as rd, numpy as np
-#import time
 from abc import ABCMeta, abstractmethod
+import gui
 
 '''
 class MyEnv
@@ -13,7 +13,7 @@ class MyEnv(simpy.Environment):
         super().__init__()
         self._arrivalList = []
         self._queueList = []
-        self._customer = Customer()
+        self._class = CustomerClass()
 
     @property
     def arrivalList(self):
@@ -23,13 +23,13 @@ class MyEnv(simpy.Environment):
     def queuList(self):
         return self._queueList
 
-    def createCustomerType(self, customerId):
-        self._customer.createNewType(customerId)
+    def createClassType(self, classId):
+        self._class.createNewType(classId)
 
-    def createArrival(self, arrivalId, customerId = None):
+    def createArrival(self, arrivalId, classId = None):
         _arrival = Arrival(self, arrivalId)
-        if customerId is not None:
-            _arrival.customerType = self._customer.idToIndex(customerId)
+        if classId is not None:
+            _arrival.classType = self._class.idToIndex(classId)
         self._arrivalList.append(_arrival)
         return _arrival
 
@@ -59,8 +59,8 @@ class MyEnv(simpy.Environment):
         self._end = EndOfNet()
         return self._end
 
-    def assineCustomerToQueue(self, customerId, toQueue):
-        toQueue.addCustomer(self._customer.idToIndex(customerId))
+    def assineClassToQueue(self, classId, toQueue):
+        toQueue.addClass(self._class.idToIndex(classId))
 
     def run(self, numOfLoop):
         for i in self._arrivalList:
@@ -69,7 +69,7 @@ class MyEnv(simpy.Environment):
             self.process(i.run())
         super().run(numOfLoop)
 
-class Customer(object):
+class CustomerClass(object):
     def __init__(self):
         # [1, 2, ...]
         self._typeList = []
@@ -81,13 +81,46 @@ class Customer(object):
     def typeList(self):
         return self._typeList
 
-    def createNewType(self, customerId):
-        self._idToIndex[customerId] = self._nextIndex
+    def createNewType(self, classId):
+        self._idToIndex[classId] = self._nextIndex
         self._typeList.append(self._nextIndex)
         self._nextIndex += 1
 
-    def idToIndex(self, customerId):
-        return self._idToIndex[customerId]
+    def idToIndex(self, classId):
+        return self._idToIndex[classId]
+
+class Customer(object):
+    def __init__(self, classType):
+        self._classType = classType
+        self._workload = 0
+        self._queueId = []
+        self._queueArrivedTime = []
+        self._exitTime = []
+
+    @property
+    def classType(self):
+        return self._classType
+
+    @classType.setter
+    def classType(self, classType):
+        self._classType = classType
+
+    @property
+    def workload(self):
+        return self._workload
+
+    @workload.setter
+    def workload(self, workload):
+        self._workload = workload
+
+    def addQueueId(self, queueId):
+        self._queueId.append(queueId)
+
+    def addQueueArrivalTime(self, time):
+        self._queueArrivedTime.append(time)
+
+    def addExitTime(self, time):
+        self._exitTime.append(time)
 
 '''
 class Arrival
@@ -102,7 +135,7 @@ class Arrival():
         self._mean = 0
         self._arrival = ''
         self._id = arrivalId
-        self._customerType = 0
+        self._classType = 0
 # getter of id
     @property
     def id(self):
@@ -140,25 +173,18 @@ class Arrival():
     def nextQueue(self, nextQueue):
         self._nextQueue = nextQueue
 
-# getter and setter of customerType
+# getter and setter of classType
     @property
-    def customerType(self):
-        return self._customerType
+    def classType(self):
+        return self._classType
 
-    @customerType.setter
-    def customerType(self, customerType):
-        self._customerType = customerType
+    @classType.setter
+    def classType(self, classType):
+        self._classType = classType
 
     def _createTask(self):
         # TODO more complex task create method
-        task = {
-           'classType': self._customerType,
-           'workload':0,
-           'queueId':[],
-           'queueArrivedTime':[],
-           'exitTime':[]
-           }
-        return task
+        return Customer(self._classType)
 
     def run(self):
         if self._arrival is "exp":
@@ -185,7 +211,7 @@ class Queue(metaclass=ABCMeta):
         self._id = queueId
         self._mean = 0
         self._work = ''
-        self._customerList = [0]
+        self._classList = [0]
 
 # getter and setter of queue id
     @property
@@ -234,28 +260,22 @@ class Queue(metaclass=ABCMeta):
         return self._work
 
     @property
-    def customerList(self):
-        return self._customerList
+    def classList(self):
+        return self._classList
 
-    def addCustomer(self, customerType):
-        self._customerList.append(customerType)
+    def addClass(self, classType):
+        self._classList.append(classType)
 
-    def _checkCustomer(self, customerType):
-        if customerType not in self._customerList:
+    def _checkClass(self, classType):
+        if classType not in self._classList:
             return False
         return True
 
 # abstractmethods
     @abstractmethod
-    def addQueue(self):
+    def addQueue(self, task):
         '''
-        task = {
-            classType:,
-            workload:,
-            queueId:[...],
-            queueArrivedTime:[...],
-            exitTime:[...]
-            }
+        class Customer()
         '''
         pass
 
@@ -278,17 +298,18 @@ class PsQueue(Queue):
 
     def addQueue(self, task):
         newTask = task
-        if self._checkCustomer(newTask['classType']) is False:
+        if self._checkClass(newTask.classType) is False:
+            #TODO customer classへの対応
             self._nextQueue.addQueue(newTask)
         else:
             if self._work is 'exp':
-                newTask['workload'] = \
+                newTask.workload = \
                     int(rd.expovariate(1.0/self._mean)*(1.0/self._execTime))
             elif self._work is 'det':
-                newTask['workload'] = \
+                newTask.workload = \
                     int(self._mean*(1.0/self._execTime))
-            newTask['queueId'].append(self._id)
-            newTask['queueArrivedTime'].append(self._env.now)
+            newTask.addQueueId(self._id)
+            newTask.addQueueArrivalTime(self._env.now)
             self._queue.append(newTask)
 
     def run(self):
@@ -318,7 +339,7 @@ class FcfsQueue(Queue):
 
     def addQueue(self, task):
         newTask = task
-        if self._checkCustomer(newTask['classType']) is False:
+        if self._checkClass(newTask['classType']) is False:
             self._nextQueue.addQueue(newTask)
         else:
             newTask['workload'] = 0
@@ -373,15 +394,17 @@ class EndOfNet(object):
                 for i in workTimes[k]:
                     workTime.append(i['exitTime'][q]-i['queueArrivedTime'][q])
                 workTimeList.append(workTime)
-                print('%s = %.3f' % (workTimes[k][0]['queueId'][q],np.average(workTime)))
+                print('%s = %.3f' %
+                        (workTimes[k][0]['queueId'][q],np.average(workTime))
+                    )
 
 
 if __name__ == '__main__':
     print('starting...')
     env = MyEnv()
 
-    env.createCustomerType('customer1')
-    env.createCustomerType('customer2')
+    env.createClassType('customer1')
+    env.createClassType('customer2')
 
     arr1 = env.createArrival('a1', 'customer1')
     arr2 = env.createArrival('a2', 'customer2')
@@ -403,13 +426,13 @@ if __name__ == '__main__':
     env.createNet(q2, q3)
     env.createNet(q3, end)
 
-    env.assineCustomerToQueue('customer1', q1)
-    env.assineCustomerToQueue('customer1', q2)
-    env.assineCustomerToQueue('customer1', q3)
+    env.assineClassToQueue('customer1', q1)
+    env.assineClassToQueue('customer1', q2)
+    env.assineClassToQueue('customer1', q3)
 
-    env.assineCustomerToQueue('customer2', q1)
-    env.assineCustomerToQueue('customer2', q3)
+    env.assineClassToQueue('customer2', q1)
+    env.assineClassToQueue('customer2', q3)
 
-    env.run(100000)
+    env.run(1000)
 
     end.printResult()
