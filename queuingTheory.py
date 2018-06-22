@@ -2,7 +2,7 @@
 # coding: UTF-8
 import simpy, random as rd, numpy as np
 from abc import ABCMeta, abstractmethod
-import gui
+import wx
 
 '''
 class MyEnv
@@ -14,6 +14,7 @@ class MyEnv(simpy.Environment):
         self._arrivalList = []
         self._queueList = []
         self._class = CustomerClass()
+        self._window = None
 
     @property
     def arrivalList(self):
@@ -22,6 +23,14 @@ class MyEnv(simpy.Environment):
     @property
     def queuList(self):
         return self._queueList
+
+    @property
+    def window(self):
+        return self._window
+
+    @window.setter
+    def window(self, window):
+        self._window = window
 
     def createClassType(self, classId):
         self._class.createNewType(classId)
@@ -62,11 +71,14 @@ class MyEnv(simpy.Environment):
     def assineClassToQueue(self, classId, toQueue):
         toQueue.addClass(self._class.idToIndex(classId))
 
-    def run(self, numOfLoop):
+    def process(self):
         for i in self._arrivalList:
-            self.process(i.run())
+            super().process(i.run())
         for i in self._queueList:
-            self.process(i.run())
+            super().process(i.run())
+
+    def run(self, numOfLoop):
+        self.process()
         super().run(numOfLoop)
 
 class CustomerClass(object):
@@ -116,11 +128,20 @@ class Customer(object):
     def addQueueId(self, queueId):
         self._queueId.append(queueId)
 
-    def addQueueArrivalTime(self, time):
+    def getQueueId(self):
+        return self._queueId
+
+    def addQueueArrivedTime(self, time):
         self._queueArrivedTime.append(time)
+
+    def getQueueArrivedTime(self):
+        return self._queueArrivedTime
 
     def addExitTime(self, time):
         self._exitTime.append(time)
+
+    def getExitTime(self):
+        return self._exitTime
 
 '''
 class Arrival
@@ -136,6 +157,9 @@ class Arrival():
         self._arrival = ''
         self._id = arrivalId
         self._classType = 0
+        self._x = 0
+        self._y = 0
+
 # getter of id
     @property
     def id(self):
@@ -182,19 +206,49 @@ class Arrival():
     def classType(self, classType):
         self._classType = classType
 
+    @property
+    def x(self):
+        return self._x
+
+    @x.setter
+    def x(self, x):
+        self._x = x
+
+    @property
+    def y(self):
+        return self._y
+
+    @y.setter
+    def y(self, y):
+        self._y = y
+
     def _createTask(self):
-        # TODO more complex task create method
         return Customer(self._classType)
 
+    def _draw(self):
+        w, h = self._panel.GetClientSize()
+        self._buffer = wx.EmptyBitmap(w,h)
+        self._dc = wx.BufferedDC(wx.ClientDC(self._panel),self._buffer)
+        self._dc.Clear()
+        self._dc.SetPen(wx.Pen('blue',3))
+        self._dc.SetBrush(wx.Brush('blue'))
+        self._dc.DrawCircle(self._x,self._y,30)
+        self._dc.DrawText(self.id, 10-8*len(self.id)/2, 10-8*len(self.id)/2)
+    
     def run(self):
+        self._panel = self._env.window.panel1.SetBackgroundColour('red')
         if self._arrival is "exp":
             while True:
                 yield self._env.timeout(rd.expovariate(1.0/self._mean))
                 self._nextQueue.addQueue(self._createTask())
+                print('here')
+                #self._draw()
         elif self._arrival is "det":
             while True:
                 yield self._env.timeout(self._mean)
                 self._nextQueue.addQueue(self._createTask())
+                print('here')
+                #self._draw()
 
 '''
 abstract class Queue
@@ -299,7 +353,6 @@ class PsQueue(Queue):
     def addQueue(self, task):
         newTask = task
         if self._checkClass(newTask.classType) is False:
-            #TODO customer classへの対応
             self._nextQueue.addQueue(newTask)
         else:
             if self._work is 'exp':
@@ -309,7 +362,7 @@ class PsQueue(Queue):
                 newTask.workload = \
                     int(self._mean*(1.0/self._execTime))
             newTask.addQueueId(self._id)
-            newTask.addQueueArrivalTime(self._env.now)
+            newTask.addQueueArrivedTime(self._env.now)
             self._queue.append(newTask)
 
     def run(self):
@@ -317,11 +370,11 @@ class PsQueue(Queue):
             yield self._env.timeout(self._execTime)
             if len(self._queue) == 0:
                 continue
-            (self.queue[self._stack])['workload'] -= 1
-            if (self._queue[self._stack])['workload'] <= 0:
+            self.queue[self._stack].workload -= 1
+            if (self._queue[self._stack]).workload <= 0:
                 endTask = self._queue[self._stack]
                 del self._queue[self._stack]
-                endTask['exitTime'].append(self._env.now)
+                endTask.addExitTime(self._env.now)
                 if self._nextQueue is not None:
                     self._nextQueue.addQueue(endTask)
                 # if there are customer classes, please add the branches
@@ -339,12 +392,12 @@ class FcfsQueue(Queue):
 
     def addQueue(self, task):
         newTask = task
-        if self._checkClass(newTask['classType']) is False:
+        if self._checkClass(newTask.classType) is False:
             self._nextQueue.addQueue(newTask)
         else:
-            newTask['workload'] = 0
-            newTask['queueId'].append(self._id)
-            newTask['queueArrivedTime'].append(self._env.now)
+            newTask.workload = 0
+            newTask.addQueueId(self._id)
+            newTask.addQueueArrivedTime(self._env.now)
             self._queue.append(newTask)
 
     def run(self):
@@ -355,7 +408,7 @@ class FcfsQueue(Queue):
                     continue
                 endTask = self._queue[0]
                 del self._queue[0]
-                endTask['exitTime'].append(self._env.now)
+                endTask.addExitTime(self._env.now)
                 if self._nextQueue is not None:
                     self._nextQueue.addQueue(endTask)
         elif self._work is 'det':
@@ -365,7 +418,7 @@ class FcfsQueue(Queue):
                     continue
                 endTask = self._queue[0]
                 del self._queue[0]
-                endTask['exitTime'].append(self._env.now)
+                endTask.addExitTime(self._env.now)
                 if self._nextQueue is not None:
                     self._nextQueue.addQueue(endTask)
 
@@ -383,21 +436,20 @@ class EndOfNet(object):
     def printResult(self):
         workTimes = {}
         for c in self._endTaskList:
-            if c['classType'] not in workTimes.keys():
-                workTimes[c['classType']] = []
-            workTimes[c['classType']].append(c)
+            if c.classType not in workTimes.keys():
+                workTimes[c.classType] = []
+            workTimes[c.classType].append(c)
         for k in workTimes.keys():
             print(k)
-            for q in range(len(workTimes[k][0]['queueId'])):
+            for q in range(len(workTimes[k][0].getQueueId())):
                 workTimeList = []
                 workTime = []
                 for i in workTimes[k]:
-                    workTime.append(i['exitTime'][q]-i['queueArrivedTime'][q])
+                    workTime.append(i.getExitTime()[q]-i.getQueueArrivedTime()[q])
                 workTimeList.append(workTime)
                 print('%s = %.3f' %
-                        (workTimes[k][0]['queueId'][q],np.average(workTime))
+                        (workTimes[k][0].getQueueId()[q],np.average(workTime))
                     )
-
 
 if __name__ == '__main__':
     print('starting...')
@@ -433,6 +485,6 @@ if __name__ == '__main__':
     env.assineClassToQueue('customer2', q1)
     env.assineClassToQueue('customer2', q3)
 
-    env.run(1000)
+    env.run(100000)
 
     end.printResult()
