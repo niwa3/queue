@@ -13,8 +13,8 @@ class MyEnv(simpy.Environment):
         super().__init__()
         self._arrivalList = []
         self._queueList = []
+        self._netList = []
         self._class = CustomerClass()
-        self._window = None
 
     @property
     def arrivalList(self):
@@ -23,14 +23,6 @@ class MyEnv(simpy.Environment):
     @property
     def queuList(self):
         return self._queueList
-
-    @property
-    def window(self):
-        return self._window
-
-    @window.setter
-    def window(self, window):
-        self._window = window
 
     def createClassType(self, classId):
         self._class.createNewType(classId)
@@ -46,8 +38,8 @@ class MyEnv(simpy.Environment):
     def addArrival(self, arrival):
         self._arrivalList.append(arrival)
 
-    def createPsQueue(self, queueId, execTime):
-        _queue = PsQueue(self, queueId, execTime)
+    def createPsQueue(self, queueId):
+        _queue = PsQueue(self, queueId)
         self._queueList.append(_queue)
         return _queue
 
@@ -61,8 +53,11 @@ class MyEnv(simpy.Environment):
         self._queueList.append(queue)
 
 # now, there is no commection delay
-    def createNet(self, fromQueue, toQueue):
-        fromQueue.nextQueue = toQueue
+    def createNet(self, fromQueue, toQueue, delay):
+        n = Net(fromQueue, toQueue)
+        n.delay = delay
+        fromQueue.nextQueue = n
+        self._netList.append(n)
 
     def createEnd(self):
         self._end = EndOfNet()
@@ -80,6 +75,17 @@ class MyEnv(simpy.Environment):
     def run(self, numOfLoop):
         self.process()
         super().run(numOfLoop)
+
+    def draw(self, dc):
+        dc.DrawText(str(round(self.now,3)), 0, 0)
+        dc.SetBrush(wx.Brush('white'))
+        for i in self._netList:
+            i.draw(dc)
+        for i in self._arrivalList:
+            i.draw(dc)
+        for i in self._queueList:
+            i.draw(dc)
+        self._end.draw(dc)
 
 class CustomerClass(object):
     def __init__(self):
@@ -142,6 +148,42 @@ class Customer(object):
 
     def getExitTime(self):
         return self._exitTime
+
+class Net(object):
+    def __init__(self, fromQueue, toQueue):
+        self._from = fromQueue
+        self._to = toQueue
+        self._taskList = []
+        self._currentDelay = []
+        self._delay = 0
+
+    @property
+    def delay(self):
+        return self._delay
+
+    @delay.setter
+    def delay(self, delay):
+        self._delay = delay
+
+    def addQueue(self, task):
+        self._taskList.append(task)
+        self._currentDelay.append(self._delay)
+
+    def run(self):
+        while True:
+            yield self._env.timeout(0.001)
+            for i in range(len(self._currentDelay)):
+                self._currentDelay[i] -= 1
+                if self._currentDelay[i] == 0:
+                    del self._currentDelay[i]
+                    self._to.addQueue(self._taskList[i])
+                    del self._taskList[i]
+                    i -= 1
+
+    def draw(self, dc):
+        dc.SetPen(wx.Pen('black', 3))
+        dc.DrawLine(self._from.x,self._from.y,self._to.x,self._to.y)
+
 
 '''
 class Arrival
@@ -225,30 +267,19 @@ class Arrival():
     def _createTask(self):
         return Customer(self._classType)
 
-    def _draw(self):
-        w, h = self._panel.GetClientSize()
-        self._buffer = wx.EmptyBitmap(w,h)
-        self._dc = wx.BufferedDC(wx.ClientDC(self._panel),self._buffer)
-        self._dc.Clear()
-        self._dc.SetPen(wx.Pen('blue',3))
-        self._dc.SetBrush(wx.Brush('blue'))
-        self._dc.DrawCircle(self._x,self._y,30)
-        self._dc.DrawText(self.id, 10-8*len(self.id)/2, 10-8*len(self.id)/2)
-    
+    def draw(self, dc):
+        dc.DrawCircle(self._x,self._y,30)
+        dc.DrawText(self.id, self._x-8*len(self.id)/2, self._y-8*len(self.id)/2)
+
     def run(self):
-        self._panel = self._env.window.panel1.SetBackgroundColour('red')
         if self._arrival is "exp":
             while True:
-                yield self._env.timeout(rd.expovariate(1.0/self._mean))
+                yield self._env.timeout(round(rd.expovariate(1.0/self._mean), 3))
                 self._nextQueue.addQueue(self._createTask())
-                print('here')
-                #self._draw()
         elif self._arrival is "det":
             while True:
                 yield self._env.timeout(self._mean)
                 self._nextQueue.addQueue(self._createTask())
-                print('here')
-                #self._draw()
 
 '''
 abstract class Queue
@@ -266,6 +297,8 @@ class Queue(metaclass=ABCMeta):
         self._mean = 0
         self._work = ''
         self._classList = [0]
+        self._x = 0
+        self._y = 0
 
 # getter and setter of queue id
     @property
@@ -325,6 +358,31 @@ class Queue(metaclass=ABCMeta):
             return False
         return True
 
+    @property
+    def x(self):
+        return self._x
+
+    @x.setter
+    def x(self, x):
+        self._x = x
+
+    @property
+    def y(self):
+        return self._y
+
+    @y.setter
+    def y(self, y):
+        self._y = y
+
+    def draw(self, dc):
+        dc.SetPen(wx.Pen('red',3))
+        dc.DrawCircle(self._x,self._y,30)
+        dc.DrawText(self.id, self._x-8*len(self.id)/2, self._y-8*len(self.id)/2)
+        for i in range(len(self._queue)):
+            y = self._y+15*i
+            dc.DrawRectangle(self._x, y, 15, 15)
+            dc.DrawText(str(self._queue[i].classType), self._x+3, y)
+
 # abstractmethods
     @abstractmethod
     def addQueue(self, task):
@@ -345,10 +403,10 @@ Working time type:
     deterministic   "det"
 '''
 class PsQueue(Queue):
-    def __init__(self, env, queueId, execTime):
+    def __init__(self, env, queueId):
         super().__init__(env, queueId)
         self._stack = 0
-        self._execTime = execTime
+        self._execTime = 0.001
 
     def addQueue(self, task):
         newTask = task
@@ -385,6 +443,10 @@ class PsQueue(Queue):
 
 '''
 G/G/1-FCFS
+あー，これは微妙か？
+タスクが来てから一定時間後に処理するんなら，
+タスクが来てからカウントが始まらないといけない気もする
+PSの方法を採用したほうが時間は少ないのか
 '''
 class FcfsQueue(Queue):
     def __init__(self, env, queueId):
@@ -425,13 +487,35 @@ class FcfsQueue(Queue):
 class EndOfNet(object):
     def __init__(self):
         self._endTaskList = []
+        self._x = 0
+        self._y = 0
 
     @property
     def queue(self):
         return self._endTaskList
 
+    @property
+    def x(self):
+        return self._x
+
+    @x.setter
+    def x(self, x):
+        self._x = x
+
+    @property
+    def y(self):
+        return self._y
+
+    @y.setter
+    def y(self, y):
+        self._y = y
+
     def addQueue(self, endTask):
         self._endTaskList.append(endTask)
+
+    def draw(self, dc):
+        dc.SetPen(wx.Pen('green',3))
+        dc.DrawCircle(self._x,self._y,30)
 
     def printResult(self):
         workTimes = {}

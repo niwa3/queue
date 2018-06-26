@@ -14,7 +14,6 @@ class MyApp(wx.Frame):
 
     def init_ui(self, env):
         self.env = env
-        self.env.window = self
         self.SetTitle('タイトル')
         self.SetSize((800, 600))
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -22,18 +21,6 @@ class MyApp(wx.Frame):
         self.Bind(wx.EVT_TIMER, self.OnTimer)
         self.timer = wx.Timer(self)
         self.timer.Start(1)
-        w, h = self.GetClientSize()
-        self.mainPanel = wx.Panel(self, size=(w, h))
-        self.mainPanel.SetBackgroundColour('white')
-        self.panel1 = wx.Panel(self.mainPanel)
-        self.panel2 = wx.Panel(self.mainPanel)
-        self.panel3 = wx.Panel(self.mainPanel)
-        layout = wx.GridSizer(rows=3, cols=3, gap=(0,0))
-        layout.Add(self.panel1, flag=wx.GROW)
-        layout.Add(self.panel2, flag=wx.GROW)
-        layout.Add(self.panel3, flag=wx.GROW)
-        self.mainPanel.SetSizer(layout)
-
         self.Show()
 
     def OnPaint(self, evt):
@@ -46,7 +33,10 @@ class MyApp(wx.Frame):
         self.DrawToBuffer()
 
     def OnTimer(self, evt):
+        self.InitBuffer()
+        self._dc.Clear()
         self.env.step()
+        self.env.draw(self._dc)
 
     def InitBuffer(self):
         self._dc = wx.BufferedDC(wx.ClientDC(self), self._buffer)
@@ -71,23 +61,31 @@ if __name__ == '__main__':
     arr2 = env.createArrival('a2', 'customer2')
     arr2.x = 50
     arr2.y = 200
-    q1 = env.createPsQueue('q1', 0.01)
-    q2 = env.createPsQueue('q2', 0.01)
-    q3 = env.createFcfsQueue('q3')
+    q1 = env.createPsQueue('q1')
+    q1.x = 150
+    q1.y = 125
+    q2 = env.createPsQueue('q2')
+    q2.x = 250
+    q2.y = 125
+    q3 = env.createPsQueue('q3')
+    q3.x = 350
+    q3.y = 125
 
-    arr1.expovariate = 10
-    arr2.expovariate = 10
-    q1.expovariate = 3
-    q2.expovariate = 3
-    q3.expovariate = 3
+    arr1.expovariate = 0.1
+    arr2.expovariate = 0.1
+    q1.expovariate = 0.03
+    q2.expovariate = 0.03
+    q3.expovariate = 0.03
 
     end = env.createEnd()
+    end.x = 450
+    end.y = 125
 
-    env.createNet(arr1, q1)
-    env.createNet(arr2, q1)
-    env.createNet(q1, q2)
-    env.createNet(q2, q3)
-    env.createNet(q3, end)
+    env.createNet(arr1, q1, 1)
+    env.createNet(arr2, q1, 1)
+    env.createNet(q1, q2, 1)
+    env.createNet(q2, q3, 1)
+    env.createNet(q3, end, 1)
 
     env.assineClassToQueue('customer1', q1)
     env.assineClassToQueue('customer1', q2)
