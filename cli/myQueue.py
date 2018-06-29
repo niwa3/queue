@@ -4,6 +4,7 @@ import random as rd
 import numpy as np
 import simpy
 from abc import ABCMeta, abstractmethod
+import sys
 
 
 class Queue(metaclass=ABCMeta):
@@ -17,6 +18,7 @@ class Queue(metaclass=ABCMeta):
         self._mean = mean
         self._classList = [0]
         self._arrive = self._env.event()
+        self._printAction = env.process(self.executionTime())
 
     @property
     def action(self):
@@ -34,14 +36,22 @@ class Queue(metaclass=ABCMeta):
     def nextQueue(self, queue):
         self._nextQueue = queue
 
-    def assignClass(self, classId):
-        self._classList.append(classId)
+    def assignClass(self, className):
+        self._classList.append(self._env.getClassList()[className])
 
     def _checkClass(self, classId):
         return classId in self._classList
 
     def executionTime(self):
-        print('mean: %.3f' % np.average(self._executionTime))
+        while True:
+            yield self._env.timeout(1)
+            if len(self._executionTime) == 0:
+                ave = 0
+            else:
+                ave = np.average(self._executionTime)
+            text = ' ' + self._id + (':%.3f' % ave)
+            sys.stdout.write(text)
+            sys.stdout.flush()
 
     @abstractmethod
     def addTask(self, task):
@@ -77,6 +87,7 @@ class FCFSQueue(Queue):
             end.addExitTime(self._id, self._env.now)
             time = self._env.now-end.getQueueArrivedTime(self._id)
             self._executionTime.append(time)
+            self.executionTime()
             if self._nextQueue is not None:
                 self._nextQueue.addTask(end)
 
@@ -126,6 +137,7 @@ class PSQueue(Queue):
                 end.addExitTime(self._id, self._env.now)
                 time = self._env.now-end.getQueueArrivedTime(self._id)
                 self._executionTime.append(time)
+                self.executionTime()
                 if self._nextQueue is not None:
                     self._nextQueue.addTask(end)
                 self._stack -= 1
