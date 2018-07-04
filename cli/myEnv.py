@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 # coding: UTF-8
 import simpy 
+import numpy as np
 import myQueue as qu
 import myGenerater as ge
+import sys
 
 '''
 class MyEnv
@@ -14,6 +16,7 @@ class MyEnv(simpy.Environment):
         self._nextClassId = 1
         self._classIdIndex = {}
         self._exit = []
+        self._printAction = self.process(self.showLoopNum())
 
     def MGenerater(self, generaterId, mean, className=None):
         classId = 0
@@ -64,24 +67,31 @@ class MyEnv(simpy.Environment):
     def classNameToId(self, className):
         return self._classIdIndex[className]
 
+    def classIdToName(self, classId):
+        name = [k for k, v in self._classIdIndex.items() if v == classId]
+        return name[0]
+
     def exitTask(self, task):
         self._exit.append(task)
 
+    def showLoopNum(self):
+        while True:
+            yield self.timeout(1)
+            sys.stdout.write('\r\33[K'+'%d>>> finished tasks:%d'%(self.now, len(self._exit)))
+            sys.stdout.flush()
 
-if __name__ == '__main__':
-    env = MyEnv()
-
-    g1_1 = env.MGenerater('g1_1', 5)
-
-    q1_1 = env.GFQueue('q1_1', 3, 3)
-
-    q2 = env.GFQueue('q2', 3)
-
-    g1_1.nextQueue = q1_1
-
-    q1_1.nextQueue = q2
-
-    env.run(1000000)
-
-    q1_1.printResult()
-    q2.printResult()
+    def printResult(self):
+        totalTimes = {}
+        for i in list(self._classIdIndex):
+            totalTimes[i] = []
+        for i in self._exit:
+            totalTimes[self.classIdToName(i.classId)].append(i)
+        for i in list(self._classIdIndex):
+            totalTimeOfClass = []
+            for j in totalTimes[i]:
+                totalTime = 0
+                for k in j.getQueueIdList():
+                    time = j.getExitTime(k) - j.getQueueArrivedTime(k)
+                    totalTime += time
+                totalTimeOfClass.append(totalTime)
+            print(i+str(totalTimes[i][0].getQueueIdList())+': total time = %.3f'%np.average(totalTimeOfClass))

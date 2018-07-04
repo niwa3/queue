@@ -2,6 +2,7 @@
 # coding: UTF-8
 import random as rd
 import numpy as np
+import simpy
 import simpy.resources.store as store
 from abc import ABCMeta, abstractmethod
 
@@ -66,11 +67,6 @@ class FCFSQueue(Queue):
         if self._checkClass(task.classId):
             task.addQueueArrivedTime(self._id, self._env.now)
             store.StorePut(self._store, task)
-        else:
-            if self._nextQueue is not None:
-                self._nextQueue.addTask(task)
-            else:
-                self._env.exitTask(task)
 
     def run(self):
         while True:
@@ -116,33 +112,38 @@ class PSQueue(Queue):
     def __init__(self, env, queueId, mean, num=1):
         super().__init__(env, queueId, mean, num)
         self._clock = 1000
+        self._stack = 0
+        self._taskList = []
+        self._arrive = self._env.event()
 
     def addTask(self, task):
         if self._checkClass(task.classId):
             task.addQueueArrivedTime(self._id, self._env.now)
             task.workload = self._work()
-        else:
-            if self._nextQueue is not None:
-                self._nextQueue.addTask(task)
-            else:
-                self._env.exitTask(task)
-            store.StorePut(self._store, task)
+            self._taskList.append(task)
+            self._arrive.succeed()
+            self._arrive = self._env.event()
 
     def run(self):
         while True:
-            task = yield store.StoreGet(self._store)
+            if len(self._taskList) == 0:
+                yield self._arrive
             yield self._env.timeout(round(1.0/self._clock,3))
-            task.workload -= 1
-            if task.workload <= 0:
-                task.addExitTime(self._id, self._env.now)
-                time = self._env.now-task.getQueueArrivedTime(self._id)
+            self._taskList[self._stack].workload -= 1
+            if self._taskList[self._stack].workload <= 0:
+                end = self._taskList[self._stack]
+                del self._taskList[self._stack]
+                end.addExitTime(self._id, self._env.now)
+                time = self._env.now-end.getQueueArrivedTime(self._id)
                 self._executionTime.append(time)
                 if self._nextQueue is not None:
-                    self._nextQueue.addTask(task)
+                    self._nextQueue.addTask(end)
                 else:
-                    self._env.exitTask(task)
-            else:
-                store.StorePut(self._store, task)
+                    self._env.exitTask(end)
+                self._stack -= 1
+            self._stack += 1
+            if self._stack == len(self._taskList):
+                self._stack = 0
 
 
 class MPQueue(PSQueue):
@@ -172,3 +173,14 @@ class GPQueue(PSQueue):
     def _work(self):
         t = rd.random()*self._mean*2
         return int(t)
+
+
+if __name__ == '__main__':
+    import myQueue as q
+    env = simpy.Environment()
+    g = q.DGenerater(env, 'g1', 5, 0)
+    q1 = DPQueue(env, 'q1', 3)
+    q2 = DPQueue(env, 'q2', 3)
+    g.nextQueue = q1
+    q1.nextQueue = q2
+    env.run(10000)

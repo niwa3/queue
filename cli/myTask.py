@@ -26,7 +26,7 @@ class Task(object):
         self._workload = workload
 
     def getQueueIdList(self):
-        return self._queueArrivedTime.keys()
+        return list(self._queueArrivedTime)
 
     def addQueueArrivedTime(self, queueId, time):
         self._queueArrivedTime[queueId] = time
