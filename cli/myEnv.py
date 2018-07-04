@@ -3,7 +3,6 @@
 import simpy 
 import myQueue as qu
 import myGenerater as ge
-import sys
 
 '''
 class MyEnv
@@ -14,7 +13,7 @@ class MyEnv(simpy.Environment):
         super().__init__()
         self._nextClassId = 1
         self._classIdIndex = {}
-        self._action = self.process(self.loop())
+        self._exit = []
 
     def MGenerater(self, generaterId, mean, className=None):
         classId = 0
@@ -30,62 +29,59 @@ class MyEnv(simpy.Environment):
         generater = ge.DGenerater(self, generaterId, mean, classId)
         return generater
 
-    def MFQueue(self, queueId, mean):
-        queue = qu.MFQueue(self, queueId, mean)
+    def MFQueue(self, queueId, mean, num=1):
+        queue = qu.MFQueue(self, queueId, mean, num)
         return queue
 
-    def DFQueue(self, queueId, mean):
-        queue = qu.DFQueue(self, queueId, mean)
+    def DFQueue(self, queueId, mean, num=1):
+        queue = qu.DFQueue(self, queueId, mean, num)
         return queue
 
-    def MPQueue(self, queueId, mean):
-        queue = qu.MPQueue(self, queueId, mean)
+    def GFQueue(self, queueId, mean, num=1):
+        queue = qu.GFQueue(self, queueId, mean, num)
         return queue
 
-    def DPQueue(self, queueId, mean):
-        queue = qu.DPQueue(self, queueId, mean)
+    def MPQueue(self, queueId, mean, num=1):
+        queue = qu.MPQueue(self, queueId, mean, num)
+        return queue
+
+    def DPQueue(self, queueId, mean, num=1):
+        queue = qu.DPQueue(self, queueId, mean, num)
+        return queue
+
+    def GPQueue(self, queueId, mean, num=1):
+        queue = qu.GPQueue(self, queueId, mean, num)
         return queue
 
     def newClass(self, className):
         self._classIdIndex[className] = self._nextClassId
+        self._nextClassId += 1
         return self._classIdIndex[className]
 
     def getClassList(self):
         return self._classIdIndex
 
-    def loop(self):
-        while True:
-            yield self.timeout(1)
-            sys.stdout.write('\r\033[K' + '%d >>>' % self.now)
-            sys.stdout.flush()
+    def classNameToId(self, className):
+        return self._classIdIndex[className]
+
+    def exitTask(self, task):
+        self._exit.append(task)
+
 
 if __name__ == '__main__':
     env = MyEnv()
-    env.newClass('a')
 
-    g1_1 = env.MGenerater('g1_1', 10, 'a')
-    g1_2 = env.MGenerater('g1_2', 10)
+    g1_1 = env.MGenerater('g1_1', 5)
 
-    g2_1 = env.MGenerater('g2_1', 10, 'a')
-    g2_2 = env.MGenerater('g2_2', 10)
+    q1_1 = env.GFQueue('q1_1', 3, 3)
 
-    q1_1 = env.DPQueue('q1_1', 3)
-    q1_1.assignClass('a')
-
-    q1_2 = env.DPQueue('q1_2', 3)
-
-    q2 = env.DPQueue('q2', 3)
-    q2.assignClass('a')
+    q2 = env.GFQueue('q2', 3)
 
     g1_1.nextQueue = q1_1
-    g1_2.nextQueue = q1_1
-
-    g2_1.nextQueue = q1_2
-    g2_2.nextQueue = q1_2
 
     q1_1.nextQueue = q2
-    q1_2.nextQueue = q2
 
-    env.run()
+    env.run(1000000)
 
-    print('')
+    q1_1.printResult()
+    q2.printResult()

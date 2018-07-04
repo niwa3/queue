@@ -9,7 +9,9 @@ class Generater(metaclass=ABCMeta):
         self._env = env
         self._action = env.process(self.run())
         self._nextQueue = None
+        self._id = generaterId
         self._classId = classId
+        self._timeList = []
 
     @property
     def nextQueue(self):
@@ -39,7 +41,9 @@ class MGenerater(Generater):
         self._mean = mean
 
     def _duration(self):
-        yield self._env.timeout(round(rd.expovariate(1.0/self._mean), 3))
+        t = round(rd.expovariate(1.0/self._mean),3)
+        self._timeList.append(t)
+        yield self._env.timeout(t)
 
 
 class DGenerater(Generater):
@@ -64,5 +68,3 @@ if __name__ == '__main__':
     g2.nextQueue = q1
     q1.nextQueue = q2
     env.run(10000)
-    q1.executionTime()
-    q2.executionTime()
