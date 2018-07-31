@@ -3,6 +3,8 @@
 import random as rd
 import myTask as t
 from abc import ABCMeta, abstractmethod
+import numpy as np
+
 
 class Generater(metaclass=ABCMeta):
     def __init__(self, env, generaterId, classId=None):
@@ -29,6 +31,14 @@ class Generater(metaclass=ABCMeta):
     def _duration(self):
         pass
 
+    def printResult(self):
+        ave = np.average(self._timeList)
+        var = np.var(self._timeList)
+        text = '('+self._id+')'
+        text += 'E(t):%.3f V(t):%.3f' % (ave, var)
+        print(text)
+        return self._timeList
+
     def run(self):
         while True:
             yield self._env.process(self._duration())
@@ -41,7 +51,7 @@ class MGenerater(Generater):
         self._mean = mean
 
     def _duration(self):
-        t = round(rd.expovariate(1.0/self._mean),3)
+        t = round(rd.expovariate(1.0/self._mean), 3)
         self._timeList.append(t)
         yield self._env.timeout(t)
 
@@ -52,7 +62,19 @@ class DGenerater(Generater):
         self._mean = mean
 
     def _duration(self):
+        self._timeList.append(self._mean)
         yield self._env.timeout(self._mean)
+
+
+class GGenerater(Generater):
+    def __init__(self, env, generaterId, mean, classId=None):
+        super().__init__(env, generaterId, classId)
+        self._mean = mean
+
+    def _duration(self):
+        t = round(rd.random()*2*self._mean, 3)
+        self._timeList.append(t)
+        yield self._env.timeout(t)
 
 
 if __name__ == '__main__':

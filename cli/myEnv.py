@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # coding: UTF-8
-import simpy 
+import simpy
 import numpy as np
 import myQueue as qu
 import myGenerater as ge
@@ -10,13 +10,15 @@ import sys
 class MyEnv
 To extend the simpy.Environment class.
 '''
+
+
 class MyEnv(simpy.Environment):
     def __init__(self):
         super().__init__()
         self._nextClassId = 1
         self._classIdIndex = {}
         self._exit = []
-        self._printAction = self.process(self.showLoopNum())
+        # self._printAction = self.process(self.showLoopNum())
 
     def MGenerater(self, generaterId, mean, className=None):
         classId = 0
@@ -30,6 +32,13 @@ class MyEnv(simpy.Environment):
         if className is not None:
             classId = self._classIdIndex[className]
         generater = ge.DGenerater(self, generaterId, mean, classId)
+        return generater
+
+    def GGenerater(self, generaterId, mean, className=None):
+        classId = 0
+        if className is not None:
+            classId = self._classIdIndex[className]
+        generater = ge.GGenerater(self, generaterId, mean, classId)
         return generater
 
     def MFQueue(self, queueId, mean, num=1):
@@ -52,8 +61,8 @@ class MyEnv(simpy.Environment):
         queue = qu.DPQueue(self, queueId, mean, num)
         return queue
 
-    def GPQueue(self, queueId, mean, num=1):
-        queue = qu.GPQueue(self, queueId, mean, num)
+    def GPQueue(self, queueId, mean, var, num=1):
+        queue = qu.GPQueue(self, queueId, mean, var, num)
         return queue
 
     def newClass(self, className):
@@ -77,7 +86,10 @@ class MyEnv(simpy.Environment):
     def showLoopNum(self):
         while True:
             yield self.timeout(1)
-            sys.stdout.write('\r\33[K'+'%d>>> finished tasks:%d'%(self.now, len(self._exit)))
+            sys.stdout.write(
+                '\r\33[K'+'%d>>> finished tasks:%d'
+                % (self.now, len(self._exit))
+            )
             sys.stdout.flush()
 
     def printResult(self):
@@ -94,4 +106,5 @@ class MyEnv(simpy.Environment):
                     time = j.getExitTime(k) - j.getQueueArrivedTime(k)
                     totalTime += time
                 totalTimeOfClass.append(totalTime)
-            print(i+str(totalTimes[i][0].getQueueIdList())+': total time = %.3f'%np.average(totalTimeOfClass))
+            print(i+str(totalTimes[i][0].getQueueIdList()) +
+                  ': total time = %.3f' % np.average(totalTimeOfClass))
